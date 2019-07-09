@@ -1,0 +1,5 @@
+I have carefully selected a set of 50 datasets from kaggle, a data and software repository for machine learning applications. 
+I developed the above four predictive models for each one of them, identified the best predictive model and then tried to predict the same from the the data set features a priori.
+Generated universal summary features to represent each of the data sets. 
+Developed a second stage multi-layer perceptron (MLP) and a random forest (RF) model to predict the best performing model, labeled from first stage training.
+Our results indicated that in a cross-validated environment, in many cases identification of the best model is possible without actually performing expensive training cycles. 
