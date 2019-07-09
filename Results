@@ -1,0 +1,3 @@
+The meta-analysis of 50 data sets from Kaggle has shown that a selected set of engineered features from whole data can be used to estimate which of the four models (MLP, LR, Logistic and SVM) is likely to perform the best, without actually performing the training.
+The inference of best model is based in MLP and RF models on the data summary features and shows a gain of about 20% in terms of AUC of the randomly labelled background data set performance. 
+These results are still modest in this pilot study and need to be evaluated further on much larger number of studies.
