@@ -1,0 +1,157 @@
+I have calculated AUC_Score and F_Score for all the 50 datasets collecetd from Kaggle after applying the feature engineering techniques like Imputaion, Label encoding, Hot encoding, Feature splitting, Scaling etc.
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+import pandas as pd  
+import numpy as np  
+import matplotlib.pyplot as plt 
+from sklearn.model_selection import train_test_split 
+from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
+from sklearn import metrics
+from sklearn.svm import SVC
+from sklearn.svm import SVR
+from sklearn.metrics import mean_squared_error, r2_score
+from scipy.stats.stats import pearsonr
+from sklearn import preprocessing
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import roc_curve, auc, confusion_matrix, roc_auc_score, f1_score,precision_recall_fscore_support, accuracy_score
+from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.neural_network import MLPClassifier
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.model_selection import KFold
+
+import warnings
+
+
+warnings.filterwarnings('ignore')
+fd_linear=open('linearReg_file_output.txt', 'a')
+
+dataset = pd.read_csv("C:/Users/a/Desktop/Python_Code/heart.csv")
+#print(dataset)
+#print(dataset.head())
+cat_feat = ['sex','cp','fbs','restecg','exang','slope','ca','thal'] #selecting columns header
+#print(cat_feat)
+df_cat_feat = dataset[cat_feat] #selecting columns header
+#print(df_cat_feat)
+num_feat = ['age','trestbps','chol','thalach','oldpeak','target']
+#print(num_feat)
+df_num_feat = dataset[num_feat]  # Filling the columns from dataset
+print(df_num_feat)
+OHE = OneHotEncoder(sparse = False, handle_unknown = 'ignore')  #One Hot Encoding of Labelled encoded data
+
+LE_OHE = OHE.fit_transform(df_cat_feat)
+#print(LE_OHE)
+
+F_data = np.hstack((LE_OHE, np.array(df_num_feat)))  # Concatenate categorical and numerical data
+#idx = np.random.permutation(F_data.shape[0])
+#F_data = F_data[idx]
+X = F_data[:,:-1]
+y = F_data[:,-1]
+
+#x = (x-x.mean(axis=0))/x.std(axis=0)
+X = (X-X.mean(axis=0))
+#print(x)
+idx=np.random.permutation(X.shape[0])
+X = np.array(X, dtype=np.float)
+X=X[idx]
+y = np.array(y, dtype=int)
+y=y[idx]
+
+#X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0) #splitting data
+
+
+reg = LinearRegression()
+kf = KFold(n_splits=303)
+g = list()
+q = list()
+#print (X.shape)
+#print (y)
+for train,test in kf.split(X):
+    clf = reg.fit(X[train], y[train])
+    p = clf.predict(X[test])
+    g.append(p)
+    q.append(y[test])
+
+pred_2=np.reshape(g,-1)
+y = np.reshape(q,-1)
+#print (pred_2)
+fpr, tpr, thresholds=roc_curve(y, pred_2, pos_label=1)
+preds_label = np.zeros(len(pred_2))
+
+g_acc=list()
+g_f=list()
+
+for j in range(len(thresholds)):
+  for i in range(len(pred_2)):
+        if thresholds[j]>pred_2[i]:
+                preds_label[i] = np.array([0])
+        else:
+             	preds_label[i] = np.array([1])
+
+  test_report_lr = precision_recall_fscore_support(y, preds_label, pos_label=1)
+  g_f.append(test_report_lr[2])
+  
+g1_f = np.reshape(np.array(g_f),-1)
+#print("g1_f:", g1_f)
+maximum_fscore = np.around(np.amax(g1_f), decimals=6)
+print ('F-score_LinearReg:',maximum_fscore)
+
+# logistic regression code--------------------------------------
+log = LogisticRegression(random_state=5)
+kf = KFold(n_splits=303)
+g = list()
+q = list()
+
+for train,test in kf.split(X):
+    clf = log.fit(X[train], y[train])
+    p = clf.predict(X[test])
+    g.append(p)
+    q.append(y[test])
+
+pred_3=np.reshape(g,-1)
+y = np.reshape(q,-1)
+print("\n logistic measures for testinmg set:-\n")
+test_report_lr = precision_recall_fscore_support(y, pred_3, pos_label=1)
+print ("F_Score_Logistic:-",test_report_lr[2])
+
+# support vector Classification ----------------------------------
+svm = SVC(kernel='rbf')
+kf = KFold(n_splits=303)
+g = list()
+q = list()
+#print (X.shape)
+for train,test in kf.split(X):
+    clf = svm.fit(X[train], y[train])
+    p = clf.predict(X[test])
+    g.append(p)
+    q.append(y[test])
+
+pred_4=np.reshape(g,-1)
+y = np.reshape(q,-1)
+print("\n SVC measures for testinmg set:-\n")
+test_report_lr = precision_recall_fscore_support(y, pred_4, pos_label=1)
+print ("F_Score_SVC:-",test_report_lr[2])
+
+# multilayer perceptron----------------------------
+mlp = MLPClassifier(hidden_layer_sizes=(15), learning_rate='constant', learning_rate_init=0.01)
+kf = KFold(n_splits=303)
+g = list()
+q = list()
+for train,test in kf.split(X):
+    clf = mlp.fit(X[train], y[train])
+    p = clf.predict(X[test])
+    g.append(p)
+    q.append(y[test])
+
+pred_5=np.reshape(g,-1)
+y = np.reshape(q,-1)
+print("\n MLP measures for testinmg set:-\n")
+test_report_lr = precision_recall_fscore_support(y, pred_5, pos_label=1)
+print ("F_Score_MLP:-",test_report_lr[2])
