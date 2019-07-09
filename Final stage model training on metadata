@@ -1,0 +1,240 @@
+Stage_01 : Metadata created from the 50 datasets collected from the kaggle
+Stage_02 : In final stage I have trained Random forest and MLP on metadata to predict the best four ML algorithms( LR, LG, SVM, MLP)
+------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------
+Final stage sample code
+------------------------------------------------------------------------------------------------------
+#('Total Input Size:', (4858, 16384)) ('train_size:', 3400), validation: 20% of the whole data, testing: 10% of the whole data.
+
+#from sys import argv
+#import input_data
+import numpy as np
+import sys, time
+import os
+import sys
+import math
+import scipy
+from datetime import datetime
+from scipy.stats import pearsonr
+from decimal import *
+from sklearn import metrics
+from sklearn.metrics import accuracy_score
+from sklearn.preprocessing import MinMaxScaler
+
+import tensorflow as tf
+import numpy as np
+
+STDDEV = 0.1
+n_input = 12
+n_classes = 4 # total classes 
+VALIDATION_SIZE = 4  # Size of the validation set.
+SEED = None  # Set to None for random seed.
+BATCH_SIZE = 21
+EVAL_BATCH_SIZE = 21
+EVAL_FREQUENCY = 21  # Number of steps between evaluations.
+
+path = '/home/jnu/Wasim/'
+directory = sys.argv[1]
+n_hidden_1 = int(sys.argv[2]) #  nodes in first hidden layer
+lr = float(sys.argv[3])
+NUM_EPOCHS = int(sys.argv[4])
+
+os.makedirs(directory)
+new_path= os.path.join(path, directory)
+
+#load the Dataset:
+inp = np.loadtxt('Data/traininput.txt', delimiter=',')
+tar = np.loadtxt('Data/ranktarget.txt', delimiter=' ')
+
+train = np.savez_compressed(os.path.join(new_path,'train'), input=inp, labels=tar)
+
+batch_xs = inp
+batch_ys = tar
+
+test_data = inp
+test_labels = tar
+
+print('batch_xs datatype:', batch_xs)
+
+num_epochs = NUM_EPOCHS
+train_size = batch_ys.shape[0]
+
+print ('train_size:', train_size)
+
+# Tf placeholders
+x = tf.placeholder(tf.float32, [None, n_input])
+y = tf.placeholder(tf.float32, [None, n_classes])
+
+weights = {
+    'h1': tf.Variable(tf.random_normal([n_input, n_hidden_1],stddev=STDDEV)),
+    'out': tf.Variable(tf.random_normal([n_hidden_1, n_classes],stddev=STDDEV)),
+}
+biases = {
+    'b1': tf.Variable(tf.random_normal([n_hidden_1])),
+    'out': tf.Variable(tf.random_normal([n_classes]))
+}
+
+def mlp(_X, _weights, _biases):
+    layer1 = tf.nn.tanh(tf.add(tf.matmul(_X, _weights['h1']), _biases['b1']))
+    out = tf.nn.softmax(tf.add(tf.matmul(layer1, _weights['out']), _biases['out']))
+    return out
+
+# Build model
+pred = mlp(x, weights, biases)
+
+# Loss and optimizer
+cost = tf.reduce_mean(tf.pow(y - pred, 2))
+
+batch = tf.Variable(0)
+learning_rate = tf.train.exponential_decay(
+        lr,                # Base learning rate.
+        batch * BATCH_SIZE,  # Current index into the dataset.
+        train_size,          # Decay step.
+        0.95,                # Decay rate.
+        staircase=True)
+optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost) # Adam Optimizer
+
+print("Net built successfully...\n")
+print("Starting testing...\n")
+
+def acc_loss(inp, tar):
+    cost = np.mean(np.absolute(tar-inp))
+    return cost
+
+def PearsonCorr(predictions, labels):
+        r_row, p_value = pearsonr(predictions, labels)
+        #r_row = scipy.square(r_row)
+        return r_row, p_value
+
+def preds_rank(a):
+	b=np.argsort(a,1)
+	c=np.argsort(b,1)+1-5
+	d=np.absolute(c)
+	return d
+
+def eval_in_batches(data, labels, sess):
+    """Get all predictions for a dataset by running it in small batches."""
+    size = data.shape[0]
+    if size < EVAL_BATCH_SIZE:
+      raise ValueError("batch size for evals larger than dataset: %d" % size)
+    predictions = np.ndarray(shape=(size, n_classes), dtype=np.float32)
+
+    for begin in xrange(0, size, EVAL_BATCH_SIZE):
+      end = begin + EVAL_BATCH_SIZE
+      if end <= size:
+        predictions[begin:end, :] = sess.run(pred, feed_dict = {x: data[begin:end, ...], y: labels[begin:end, ...]})
+
+      else:
+        batch_predictions = sess.run(pred, feed_dict = {x: data[-EVAL_BATCH_SIZE:, ...], y: labels[-EVAL_BATCH_SIZE:, ...]})
+        predictions[begin:, :] = batch_predictions[begin - size:, :]
+
+    return predictions
+
+# Initializing the variables
+init = tf.global_variables_initializer()
+
+# Add ops to save and restore all the variables.
+saver = tf.train.Saver()
+
+# Launch the graph
+with tf.Session() as sess:
+    #sess = tf.Session()
+  sess.run(init)
+  step = 1
+  i_end=0
+  flag = 0
+  validation_loss_prev = 1
+  no_of_batches = math.ceil(train_size / float(BATCH_SIZE))
+  print('number of batches:',no_of_batches)
+  i = 1
+  count_loss = 0
+  count_epoch = 0
+
+  batch_xs = batch_xs.reshape((len(batch_xs), n_input))
+  print batch_xs
+  batch_ys = batch_ys.reshape((len(batch_xs), n_classes))
+
+  test_data = test_data.reshape((len(test_data), n_input))
+  test_labels = test_labels.reshape((len(test_data), n_classes))
+
+  print ('int(num_epochs * train_size) // BATCH_SIZE:', int(num_epochs * train_size) // BATCH_SIZE)
+
+  #sys.stdout=open(os.path.join(new_path,"run_out.txt"),"w")
+  f_loss=open(os.path.join(new_path,'loss.txt'), 'w')
+  for step in xrange((int(num_epochs * train_size) // BATCH_SIZE)):
+      offset = (step * BATCH_SIZE) % train_size
+      #print('offset:%d, offset + BATCH_SIZE:%d' %(offset, offset + BATCH_SIZE))
+      inp_data = batch_xs[offset:(offset + BATCH_SIZE),...]
+      inp_labels = batch_ys[offset:(offset + BATCH_SIZE),...]
+      feed_dict = {x: inp_data, y: inp_labels}
+      start_time = time.time()
+      _, c, predictions = sess.run([optimizer, cost, pred], feed_dict = feed_dict)
+      duration = time.time() - start_time
+      saver.save(sess, os.path.join(new_path,"mlp.ckpt"))
+      f_loss.write('{:f}\n'.format(c))
+
+      if step == (i * no_of_batches) - 1:
+	      idx = np.random.permutation(batch_xs.shape[0])
+              batch_xs = batch_xs[idx]
+	      batch_ys = batch_ys[idx]
+
+              #print('%s: Step %d (epoch %.2f), %.3f sec/epoch' % (datetime.now(), step, float(step+1) * BATCH_SIZE / train_size, duration))
+    	      prediction = eval_in_batches(batch_xs, batch_ys, sess)
+	      #output = preds_rank(prediction)
+              tr_loss = acc_loss(prediction, batch_ys)
+
+              print('(epoch %.2f), overall training loss: %.6f' % (float(step+1) * BATCH_SIZE / train_size, tr_loss))
+              #print('--------------------------------------------------------------------------------------------------------------------')
+	      f_loss.write('{:f}\n'.format(tr_loss))
+              i = i + 1
+
+      elif step % EVAL_FREQUENCY == 0:
+        print('Step %d (epoch %.2f)' % (step, float(step+1) * BATCH_SIZE / train_size))
+      sys.stdout.flush()
+  f_loss.close()   
+    
+  #saver.restore(sess, os.path.join(new_path,"mlp.ckpt"))
+  print('****************************************** testing PREDICTIONS: ********************************************')
+  prediction = eval_in_batches(test_data, test_labels, sess)
+  tr_loss = acc_loss(prediction, test_labels)
+  print ('tr_loss:', tr_loss)
+
+  np.savetxt(os.path.join(new_path,'testing_predictions.txt'), prediction, fmt = '%.6f')
+  np.savetxt(os.path.join(new_path,'testing_labels.txt'), test_labels, fmt = '%d')
+
+  tr_p_corr1, tr_p_val1 = PearsonCorr(prediction[:,:1], test_labels[:,:1])
+  tr_p_corr2, tr_p_val2 = PearsonCorr(prediction[:,1:2], test_labels[:,1:2])
+  tr_p_corr3, tr_p_val3 = PearsonCorr(prediction[:,2:3], test_labels[:,2:3])
+  tr_p_corr4, tr_p_val4 = PearsonCorr(prediction[:,3:], test_labels[:,3:])
+  print('When prediction is sigmoid values--------------------')
+  print ('Linear Regression p_corr:', tr_p_corr1, tr_p_val1)
+  print ('Logistic          p_corr:', tr_p_corr2, tr_p_val2)
+  print ('SVM               p_corr:', tr_p_corr3, tr_p_val3)
+  print ('MLP               p_corr:', tr_p_corr4, tr_p_val4)
+
+  tr_preds = np.reshape(prediction, -1)
+  tr_ys = np.reshape(test_labels, -1)
+  tr_p_corr, tr_p_val = PearsonCorr(tr_preds, tr_ys)
+  print ('overall           p_corr:', tr_p_corr, tr_p_val)
+
+  prediction = preds_rank(prediction)
+  np.savetxt(os.path.join(new_path,'testing_rankpredictions.txt'), prediction, fmt = '%d')
+
+  tr_p_corr1, tr_p_val1 = PearsonCorr(prediction[:,:1], test_labels[:,:1])
+  tr_p_corr2, tr_p_val2 = PearsonCorr(prediction[:,1:2], test_labels[:,1:2])
+  tr_p_corr3, tr_p_val3 = PearsonCorr(prediction[:,2:3], test_labels[:,2:3])
+  tr_p_corr4, tr_p_val4 = PearsonCorr(prediction[:,3:], test_labels[:,3:])
+  print ('When predictions are Rank:----------------------')
+  print ('Linear Regression p_corr:', tr_p_corr1, tr_p_val1)
+  print ('Logistic          p_corr:', tr_p_corr2, tr_p_val2)
+  print ('SVM               p_corr:', tr_p_corr3, tr_p_val3)
+  print ('MLP               p_corr:', tr_p_corr4, tr_p_val4)
+
+  tr_preds = np.reshape(prediction, -1)
+  tr_ys = np.reshape(test_labels, -1)
+  tr_p_corr, tr_p_val = PearsonCorr(tr_preds, tr_ys)
+  print ('overall           p_corr:', tr_p_corr, tr_p_val)
+
+  sys.stdout.close()
+
+
