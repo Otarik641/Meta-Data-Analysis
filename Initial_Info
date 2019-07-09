@@ -1,0 +1,4 @@
+A number of supervised machine learning models have been introduced in the last decade for the meta-data classification problems. 
+The current challenge is to select the most suitable and best performing predictive model among them.
+I have explored a choice between four machine learning models viz Linear regression, Logistic regression and Support vector classification and a Multilayer perceptron (MLP) 
+Tried to estimate a priori which of these models is likely to explain and hence predict the target features in each of the selected data sets
